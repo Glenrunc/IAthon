@@ -1,0 +1,9 @@
+streamlit
+google-generativeai
+mistralai
+pdfplumber
+pydantic>=2
+python-dotenv
+pandas
+reportlab
+pillow

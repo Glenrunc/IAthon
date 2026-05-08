@@ -1,0 +1,11 @@
+{
+  "supplier_name": "Acme SARL",
+  "supplier_siret": "73282932000074",
+  "supplier_vat_number": "FR44732829320",
+  "invoice_number": "F-2026-001",
+  "invoice_date": "2026-04-15",
+  "amount_ht": 100.0,
+  "amount_vat": 20.0,
+  "amount_ttc": 120.0,
+  "vat_rate": 20.0
+}
