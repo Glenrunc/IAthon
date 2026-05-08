@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from core.confidence import score
+from core.helpers import appeler_llm_vision_json_bytes, configurer_api
 from core.models import InvoiceData
 
 
@@ -40,7 +41,7 @@ class NetworkError(ExtractionError):
 
 
 class JsonParseError(ExtractionError):
-    """Provider returned non-JSON or malformed JSON."""
+    """Provider returned non JSON or malformed JSON."""
 
 
 class SchemaValidationError(ExtractionError):
@@ -62,38 +63,18 @@ class GeminiProvider:
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise MissingKeyError("GOOGLE_API_KEY missing from environment")
-        try:
-            import google.generativeai as genai
 
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(self.model_name)
-            response = model.generate_content(
-                [prompt, {"mime_type": mime, "data": file_bytes}]
-            )
-            return response.text
-        except ExtractionError:
-            raise
+        if not configurer_api():
+            raise ExtractionError("Failed to configure API client")
+
+        try:
+            return appeler_llm_vision_json_bytes(prompt, file_bytes, mime, self.model_name)
         except Exception as e:
-            # Classify by exception type before falling back to message matching.
-            try:
-                from google.api_core import exceptions as gax
-                if isinstance(e, gax.ResourceExhausted):
-                    raise RateLimitError(str(e)) from e
-                if isinstance(e, gax.DeadlineExceeded):
-                    raise NetworkError(str(e)) from e
-            except ImportError:
-                pass
-            if isinstance(e, (socket.timeout, TimeoutError)):
-                raise NetworkError(str(e)) from e
-            try:
-                import requests
-                if isinstance(e, requests.exceptions.Timeout):
-                    raise NetworkError(str(e)) from e
-            except ImportError:
-                pass
             msg = str(e)
             if _RATE_LIMIT_RE.search(msg):
                 raise RateLimitError(msg) from e
+            if isinstance(e, (socket.timeout, TimeoutError)):
+                raise NetworkError(str(e)) from e
             raise ExtractionError(f"Gemini API call failed: {e}") from e
 
 
@@ -157,24 +138,8 @@ def extract(
     except ExtractionError:
         raise
     except Exception as e:
-        # Classify exceptions that bypass GeminiProvider's internal handler
-        # (e.g. when extract_json is mocked to raise directly in tests).
-        try:
-            from google.api_core import exceptions as gax
-            if isinstance(e, gax.ResourceExhausted):
-                raise RateLimitError(str(e)) from e
-            if isinstance(e, gax.DeadlineExceeded):
-                raise NetworkError(str(e)) from e
-        except ImportError:
-            pass
         if isinstance(e, (socket.timeout, TimeoutError)):
             raise NetworkError(str(e)) from e
-        try:
-            import requests
-            if isinstance(e, requests.exceptions.Timeout):
-                raise NetworkError(str(e)) from e
-        except ImportError:
-            pass
         msg = str(e)
         if _RATE_LIMIT_RE.search(msg):
             raise RateLimitError(msg) from e
