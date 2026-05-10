@@ -129,13 +129,18 @@ def appeler_llm_vision(prompt: str, image_pil: Any) -> str:
 def appeler_llm_multimodal(prompt: str, mime_type: str, file_bytes: bytes) -> str:
     """Appelle le LLM pour des fichiers complexes avec gestion de quota."""
     global _MODELE_DISPONIBLE
+    
+    # Import du module types de genai
+    from google.genai import types
+    
     for tentative in range(3):
         nom_modele = obtenir_modele()
         try:
             response = _CLIENT.models.generate_content(
                 model=nom_modele,
                 contents=[
-                    {"mime_type": mime_type, "data": file_bytes},
+                    # Utilisation de types.Part.from_bytes au lieu du dictionnaire
+                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
                     prompt
                 ]
             )
