@@ -43,7 +43,7 @@ def obtenir_modele() -> str:
         modeles_obj = _CLIENT.models.list()
         modeles = [m.name for m in modeles_obj]
 
-        preferences = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash']
+        preferences = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
 
         for pref in preferences:
             if pref in modeles or f"models/{pref}" in modeles:
