@@ -14,9 +14,18 @@ from core.storage import (
     list_batches,
     update_batch,
 )
+from core.config import charger_configuration, charger_logo
+from core.helpers import configurer_api
 from ui.export import render_export
 from ui.review import render_review
 from ui.upload import process_files, render_upload
+from ui.accueil_view import render_accueil_view
+from ui.rh_view import render_rh_view
+from ui.marketing_view import render_marketing_view
+from ui.audio_view import render_audio_view
+from ui.client_view import render_client_view
+from ui.config_view import render_config_view
+from ui.facture_view import render_facture_view
 
 
 MIN_PER_INVOICE = 3
@@ -664,92 +673,121 @@ def _save_siren_to_batch() -> None:
 
 def _render_sidebar() -> None:
     with st.sidebar:
+        if st.session_state.get('entreprise_logo'):
+            st.image(st.session_state['entreprise_logo'], use_column_width=True)
+
         st.markdown(
             f"""
 <div style="display:flex;align-items:center;gap:10px;padding:8px 0 18px;">
   <div style="width:28px;height:28px;border-radius:6px;background:var(--ink);color:var(--bg);
        display:grid;place-items:center;">{_icon("logo", size=14, stroke=1.6)}</div>
   <div style="font-family:var(--font-display);font-weight:600;font-size:18px;color:var(--ink);
-       letter-spacing:-0.01em;">Facture</div>
+       letter-spacing:-0.01em;">{st.session_state.get('entreprise_nom', 'Facture')}</div>
 </div>
 """,
             unsafe_allow_html=True,
         )
 
+        api_active = configurer_api()
+        if not api_active:
+            st.error("🔑 Clé API non configurée dans le fichier .env")
+            st.stop()
+
         st.markdown(
             '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;'
-            'text-transform:uppercase;color:var(--ink-3);margin-bottom:6px;">Entreprise</div>',
-            unsafe_allow_html=True,
-        )
-        st.text_input(
-            label="SIREN",
-            key="batch_siren",
-            max_chars=9,
-            placeholder="123456789",
-            help="Format INSEE — 9 chiffres, sans espace",
-            on_change=_save_siren_to_batch,
-        )
-        st.markdown(_siren_feedback(st.session_state["batch_siren"]), unsafe_allow_html=True)
-
-        st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
-
-        if st.button("+ Nouveau lot", type="primary", use_container_width=True):
-            st.session_state["batch_id"] = None
-            st.session_state["invoices"] = []
-            st.session_state["_just_exported"] = False
-            st.session_state["batch_verified"] = False
-            st.rerun()
-
-        # ── Lots récents ──────────────────────────────────────────
-        st.markdown(
-            '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;'
-            'text-transform:uppercase;color:var(--ink-3);margin:20px 0 8px;">Lots récents</div>',
+            'text-transform:uppercase;color:var(--ink-3);margin-bottom:6px;">Navigation</div>',
             unsafe_allow_html=True,
         )
 
-        batches = list_batches()
-        current_id = st.session_state.get("batch_id")
+        st.session_state['navigation_radio'] = st.radio(
+            "Navigation",
+            [
+                "🏠 Accueil",
+                "📊 Gestion",
+                "🤝 Ressources",
+                "🚀 Croissance",
+                "⚙️ Paramètres"
+            ],
+            index=0,
+            label_visibility="collapsed"
+        )
 
-        if not batches:
+        st.divider()
+
+        if st.session_state['navigation_radio'] == "📊 Gestion":
             st.markdown(
-                '<div style="font-size:12px;color:var(--ink-3);padding:6px 4px;">'
-                "Aucun lot. Déposez vos factures pour commencer."
-                "</div>",
+                '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;'
+                'text-transform:uppercase;color:var(--ink-3);margin-bottom:6px;">Entreprise</div>',
                 unsafe_allow_html=True,
             )
-        else:
+            st.text_input(
+                label="SIREN",
+                key="batch_siren",
+                max_chars=9,
+                placeholder="123456789",
+                help="Format INSEE — 9 chiffres, sans espace",
+                on_change=_save_siren_to_batch,
+            )
+            st.markdown(_siren_feedback(st.session_state["batch_siren"]), unsafe_allow_html=True)
+
+            st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+
+            if st.button("+ Nouveau lot", type="primary", use_container_width=True):
+                st.session_state["batch_id"] = None
+                st.session_state["invoices"] = []
+                st.session_state["_just_exported"] = False
+                st.session_state["batch_verified"] = False
+                st.rerun()
+
             st.markdown(
-                '<div style="border:1px solid var(--line);border-radius:8px;'
-                'overflow:hidden;background:var(--surface);">',
+                '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;'
+                'text-transform:uppercase;color:var(--ink-3);margin:20px 0 8px;">Lots récents</div>',
                 unsafe_allow_html=True,
             )
-            for list_idx, b in enumerate(batches[:10]):
-                is_current = b["id"] == current_id
-                date_str = b["created_at"][:10]
-                n_inv = b.get("invoice_count", 0)
-                siren_display = b.get("siren") or ""
-                separator = "border-top:1px solid var(--line);" if list_idx > 0 else ""
-                bg = "background:rgba(31,58,138,.05);" if is_current else ""
-                accent_bar = (
-                    "border-left:2px solid var(--accent);"
-                    if is_current
-                    else "border-left:2px solid transparent;"
-                )
-                verified_icon = (
-                    f'&ensp;<span style="color:var(--success);font-size:11px;">'
-                    f'{_icon("check", size=11, stroke=2.4)} Vérifié</span>'
-                    if b.get("verified")
-                    else ""
-                )
-                badge = (
-                    '&ensp;<span style="font-size:10px;font-weight:500;'
-                    'background:var(--accent);color:var(--bg);border-radius:3px;'
-                    'padding:1px 5px;">EN COURS</span>'
-                    if is_current
-                    else ""
-                )
+
+            batches = list_batches()
+            current_id = st.session_state.get("batch_id")
+
+            if not batches:
                 st.markdown(
-                    f"""
+                    '<div style="font-size:12px;color:var(--ink-3);padding:6px 4px;">'
+                    "Aucun lot. Déposez vos factures pour commencer."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div style="border:1px solid var(--line);border-radius:8px;'
+                    'overflow:hidden;background:var(--surface);">',
+                    unsafe_allow_html=True,
+                )
+                for list_idx, b in enumerate(batches[:10]):
+                    is_current = b["id"] == current_id
+                    date_str = b["created_at"][:10]
+                    n_inv = b.get("invoice_count", 0)
+                    siren_display = b.get("siren") or ""
+                    separator = "border-top:1px solid var(--line);" if list_idx > 0 else ""
+                    bg = "background:rgba(31,58,138,.05);" if is_current else ""
+                    accent_bar = (
+                        "border-left:2px solid var(--accent);"
+                        if is_current
+                        else "border-left:2px solid transparent;"
+                    )
+                    verified_icon = (
+                        f'&ensp;<span style="color:var(--success);font-size:11px;">'
+                        f'{_icon("check", size=11, stroke=2.4)} Vérifié</span>'
+                        if b.get("verified")
+                        else ""
+                    )
+                    badge = (
+                        '&ensp;<span style="font-size:10px;font-weight:500;'
+                        'background:var(--accent);color:var(--bg);border-radius:3px;'
+                        'padding:1px 5px;">EN COURS</span>'
+                        if is_current
+                        else ""
+                    )
+                    st.markdown(
+                        f"""
 <div style="padding:8px 10px;{separator}{bg}{accent_bar}">
   <div style="font-size:12.5px;font-weight:600;
        color:{'var(--accent)' if is_current else 'var(--ink)'};">
@@ -760,42 +798,40 @@ def _render_sidebar() -> None:
     {'<br/><span style="font-family:var(--font-mono);letter-spacing:.04em;">' + siren_display + '</span>' if siren_display else ''}
   </div>
 </div>""",
-                    unsafe_allow_html=True,
-                )
+                        unsafe_allow_html=True,
+                    )
 
-                load_col, del_col = st.columns([3, 1])
-                if not is_current:
-                    with load_col:
+                    load_col, del_col = st.columns([3, 1])
+                    if not is_current:
+                        with load_col:
+                            if st.button(
+                                "↗ Charger",
+                                key=f"load_batch_{b['id']}",
+                                use_container_width=True,
+                                type="primary",
+                            ):
+                                records = get_batch_records(b["id"])
+                                st.session_state["batch_id"] = b["id"]
+                                st.session_state["invoices"] = records
+                                st.session_state["_pending_siren"] = b.get("siren") or ""
+                                st.session_state["batch_verified"] = bool(b.get("verified"))
+                                st.session_state["_just_exported"] = False
+                                st.rerun()
+                    with del_col:
                         if st.button(
-                            "↗ Charger",
-                            key=f"load_batch_{b['id']}",
+                            "🗑",
+                            key=f"del_batch_{b['id']}",
                             use_container_width=True,
-                            type="primary",
+                            help="Supprimer ce lot",
                         ):
-                            records = get_batch_records(b["id"])
-                            st.session_state["batch_id"] = b["id"]
-                            st.session_state["invoices"] = records
-                            # Can't set batch_siren directly — widget already rendered.
-                            # Store as pending; _bootstrap applies it on the next run.
-                            st.session_state["_pending_siren"] = b.get("siren") or ""
-                            st.session_state["batch_verified"] = bool(b.get("verified"))
-                            st.session_state["_just_exported"] = False
+                            delete_batch(b["id"])
+                            if is_current:
+                                st.session_state["batch_id"] = None
+                                st.session_state["invoices"] = []
+                                st.session_state["batch_verified"] = False
                             st.rerun()
-                with del_col:
-                    if st.button(
-                        "🗑",
-                        key=f"del_batch_{b['id']}",
-                        use_container_width=True,
-                        help="Supprimer ce lot",
-                    ):
-                        delete_batch(b["id"])
-                        if is_current:
-                            st.session_state["batch_id"] = None
-                            st.session_state["invoices"] = []
-                            st.session_state["batch_verified"] = False
-                        st.rerun()
 
-            st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown(
             '<div style="margin-top:28px;padding-top:14px;border-top:1px solid var(--line);'
@@ -810,6 +846,17 @@ def _render_sidebar() -> None:
 def _bootstrap() -> None:
     load_dotenv()
     init_db()
+
+    config = charger_configuration()
+    st.session_state.setdefault("entreprise_nom", config['entreprise_nom'])
+    st.session_state.setdefault("entreprise_gerant", config['entreprise_gerant'])
+
+    logo = charger_logo(config.get('logo_path'))
+    if logo:
+        st.session_state.setdefault("entreprise_logo", logo)
+
+    st.session_state.setdefault("navigation_radio", "🏠 Accueil")
+
     # Apply any pending session-state writes that must precede widget instantiation.
     # batch_siren cannot be set after st.text_input(key="batch_siren") renders,
     # so the "Charger" handler stores it here and we apply it first.
@@ -833,7 +880,7 @@ def _reset_db_for_demo() -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Facture — FEC",
+        page_title="PME AI Toolkit",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -842,50 +889,78 @@ def main() -> None:
     _bootstrap()
 
     _render_sidebar()
-    _render_header()
-    _render_step_rail(_current_phase(), verified=st.session_state.get("batch_verified", False))
 
-    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    disabled_reason = (
-        "Ajoutez GOOGLE_API_KEY dans .env pour activer l'extraction"
-        if not api_key
-        else None
-    )
-    if disabled_reason:
-        st.warning(disabled_reason)
+    choix = st.session_state['navigation_radio']
 
-    files, clicked = render_upload(disabled_reason=disabled_reason)
+    if choix == "🏠 Accueil":
+        render_accueil_view()
 
-    if clicked and files:
-        if st.session_state["batch_id"] is None:
-            new_id = create_batch(siren=st.session_state.get("batch_siren", ""))
-            st.session_state["batch_id"] = new_id
-            st.session_state["invoices"] = []
-            st.toast(f"Lot #{new_id} créé", icon="✅")
+    elif choix == "📊 Gestion":
+        with st.expander("📝 Générateur de Factures", expanded=True):
+            render_facture_view()
+        st.divider()
 
-        def _on_invoice(invoice_id, invoice):
-            st.session_state["invoices"].append((invoice_id, invoice))
+        _render_header()
+        _render_step_rail(_current_phase(), verified=st.session_state.get("batch_verified", False))
 
-        st.session_state["_processing"] = True
-        process_files(
-            files=files,
-            batch_id=st.session_state["batch_id"],
-            on_invoice=_on_invoice,
+        api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+        disabled_reason = (
+            "Ajoutez GOOGLE_API_KEY dans .env pour activer l'extraction"
+            if not api_key
+            else None
         )
-        st.session_state["_processing"] = False
+        if disabled_reason:
+            st.warning(disabled_reason)
 
-    render_review(st.session_state["invoices"])
+        files, clicked = render_upload(disabled_reason=disabled_reason)
 
-    invoices_only = [inv for _id, inv in st.session_state["invoices"]]
-    render_export(invoices_only, siren=st.session_state["batch_siren"])
+        if clicked and files:
+            if st.session_state["batch_id"] is None:
+                new_id = create_batch(siren=st.session_state.get("batch_siren", ""))
+                st.session_state["batch_id"] = new_id
+                st.session_state["invoices"] = []
+                st.toast(f"Lot #{new_id} créé", icon="✅")
 
-    st.markdown(
-        '<div class="fct-footer">'
-        "<span>Facture · v0.4 — De la facture papier à l'écriture comptable</span>"
-        "<span>Article A47 A-1 du Livre des procédures fiscales</span>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+            def _on_invoice(invoice_id, invoice):
+                st.session_state["invoices"].append((invoice_id, invoice))
+
+            st.session_state["_processing"] = True
+            process_files(
+                files=files,
+                batch_id=st.session_state["batch_id"],
+                on_invoice=_on_invoice,
+            )
+            st.session_state["_processing"] = False
+
+        render_review(st.session_state["invoices"])
+
+        invoices_only = [inv for _id, inv in st.session_state["invoices"]]
+        render_export(invoices_only, siren=st.session_state["batch_siren"])
+
+        st.markdown(
+            '<div class="fct-footer">'
+            "<span>Facture · v0.4 — De la facture papier à l'écriture comptable</span>"
+            "<span>Article A47 A-1 du Livre des procédures fiscales</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    elif choix == "🤝 Ressources":
+        with st.expander("🤝 Recrutement RH", expanded=False):
+            render_rh_view()
+        st.divider()
+        with st.expander("🎙️ Compte-rendu Réunion", expanded=False):
+            render_audio_view()
+
+    elif choix == "🚀 Croissance":
+        with st.expander("🚀 Générateur Fiches Produits", expanded=False):
+            render_marketing_view()
+        st.divider()
+        with st.expander("💬 Copilote Service Client", expanded=False):
+            render_client_view()
+
+    elif choix == "⚙️ Paramètres":
+        render_config_view()
 
 
 if __name__ == "__main__":
